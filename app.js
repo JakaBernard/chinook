@@ -5,11 +5,13 @@ if (!process.env.PORT)
 var sqlite3 = require('sqlite3').verbose();
 var db = new sqlite3.Database('chinook.sl3');
 
+var itemsPerPage = 20;
+
 /* calls callback with specified page's artists and artist's details */
 var artists = function(page, artist, details, callback) {
   db.all("SELECT Artist.ArtistId, Name, StarsNo " +
     "FROM Artist, Stars WHERE Artist.ArtistId = Stars.ArtistId " +
-    "ORDER BY Name LIMIT 33 OFFSET ($page - 1) * 33",
+    "ORDER BY Name LIMIT "+ itemsPerPage +" OFFSET ($page - 1) *" + itemsPerPage,
     {$page: page}, function(error, rows) {
       if (error) {
         console.log(error);
@@ -18,7 +20,7 @@ var artists = function(page, artist, details, callback) {
         var result = '<div id="artists">';
         for (var i = 0; i < rows.length; i++) {
           var selected = rows[i].ArtistId == artist;
-          result += '<div id="' + rows[i].ArtistId + '"><span class="numbers">' + (page * 33 + i - 32) + '.</span>' +
+          result += '<div id="' + rows[i].ArtistId + '"><span class="numbers">' + (page * itemsPerPage + i - (itemsPerPage-1)) + '.</span>' +
             '<a href="/artists/' + page + (!selected? '/details/' + rows[i].ArtistId: '') + '#' + rows[i].ArtistId + '">' +
             '<button type="button" class="btn btn-default' + (selected? ' selected': '') + '">' +
             rows[i].Name + '</button></a><span class="stars">';
@@ -93,8 +95,16 @@ var genres = function(artist, callback) {
         console.log(error);
         callback('<strong>Something went wrong!</strong>');
       } else {
-        var result = '<h5>Genres</h5><div id="genres">' + 
-          'No genres for this artist' + 
+        var result = '<h5>Genres</h5><div id="genres">'; 
+        if(rows.length == 0) {
+          result += 'No genres for this artist';        
+        } else {
+          for (var i = 0; i< rows.length; i++) {
+            result += (i > 0 ? ' | ' : '') + rows[i].Name; //če je i večji od 0, izpiši pipe (  |  ), če ne, ga ne izpiši 
+          }
+        }
+        
+          
           '</div>';
         callback(result);
       }
@@ -103,22 +113,22 @@ var genres = function(artist, callback) {
 
 /* initialization of Express application */
 var express = require('express');
-var app = express();
+var app = express();                //kreiramo strežnik
 
 /* settings for static application files */
-app.use(express.static('public'));
-app.set('view engine', 'ejs');
+app.use(express.static('public'));  //povemo, da imamo statične datoteke, ki se nahajajo v mapi public
+app.set('view engine', 'ejs');      //uporabljali bomo komponento view, natančneje view engine "ejs"
 
 /* responds with first page's artists */
-app.get('/artists', function(request, response) {
+app.get('/artists', function(request, response) { 
   response.redirect('/artists/1');
 });
 
 /* responds with specified page's artists */
-app.get('/artists/:page', function(request, response) {
+app.get('/artists/:page', function(request, response) { //straznik poslusa na /artists/:page  --- :page je spremenljivka
   artists(request.params.page, -1, '', function(result) {
-    response.render('index', {content: result});
-  });
+    response.render('index', {content: result});        //nardimo template, prvi parameter je ime predloge (v tem primeru 'index')     {content: result} ---> poisci premenljivke (content), in zamenjaj (z result)
+  });   //u templatu je ena zadeva z id-jem "pages", pol se nek klice script.js
 });
 
 /* responds with specified page's artists and artist's details */
@@ -142,7 +152,7 @@ app.get('/albums/:artist', function(request, response) {
 });
 
 /* responds with specified album's details */
-app.get('/album/:album', function(request, response) {
+app.get('/album/:album', function(request, response) { //stretnik poslusa na /album/spremenljivka
   db.get("SELECT COUNT(*) AS Tracks, SUM(Milliseconds) AS Time, " +
     "SUM(UnitPrice) AS Price FROM Track WHERE AlbumId = $album",
     {$album: request.params.album}, function(error, row) {
@@ -150,7 +160,7 @@ app.get('/album/:album', function(request, response) {
         console.log(error);
         response.sendStatus(404);
       } else
-        response.send({tracks: row.Tracks, time: row.Time, price: row.Price});
+        response.send({tracks: row.Tracks, time: row.Time, price: row.Price}); //kot odgovor vrne 3 stevilke ---> v "data" odjemalcu vrne te 3 spremenljivke
   });
 });
 
@@ -187,8 +197,16 @@ app.get('/pages', function(request, response) {
       console.log(error);
       response.sendStatus(500);
     } else
-      response.send({pages: Math.ceil(row.Artists / 33)});
+      response.send({pages: Math.ceil(row.Artists / itemsPerPage)});
   });
 });
 
+/* responds with first page's artists */
+app.get('/', function(request, response) { //po defaultu te posle na stran /artists/1
+  response.redirect('/artists/1');
+});
+
+app.listen(process.env.PORT, function (){ //streznik imamo v objektu "app" (?) (nardil okrog vrstice 106 ?)
+  console.log("'TIS ALIIIIIVE!!! (Strežnik je pognan ...)");
+}) 
 
